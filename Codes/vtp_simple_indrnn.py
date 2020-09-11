@@ -34,7 +34,7 @@ from sklearn.metrics import mean_squared_error
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense,Embedding
 from tensorflow.keras.layers import LSTM
 from tensorflow.keras.layers import Bidirectional
 from tensorflow.keras.layers import Flatten
@@ -43,7 +43,7 @@ from tensorflow.keras.layers import RepeatVector
 from tensorflow.keras.layers import ConvLSTM2D
 from tensorflow.keras.layers import MaxPool1D, Conv1D
 
-from ind_rnn import IndRNNCell, RNN
+from ind_rnn import IndRNNCell, RNN, IndRNN
 #%% Load dataset
 
 url_1 = 'https://github.com/duonghung86/Vehicle-trajectory-tracking/raw/master/Data/NGSIM/0750_0805_us101_smoothed_11_.zip'
@@ -237,8 +237,8 @@ if standard:
 X_train = X_train.values
 X_test = X_test.values
 # reshape into [# samples, # timesteps,# features]
-X_train = np.float32(X_train.reshape((X_train.shape[0], X_train.shape[1],1)))
-X_test = np.float32(X_test.reshape((X_test.shape[0], X_test.shape[1],1)))
+#X_train = np.float32(X_train.reshape((X_train.shape[0], X_train.shape[1],1)))
+#X_test = np.float32(X_test.reshape((X_test.shape[0], X_test.shape[1],1)))
 
 
 """## Prediction model"""
@@ -250,19 +250,22 @@ cells = [IndRNNCell(hidden_units),
          IndRNNCell(hidden_units)]
 
 #mirrored_strategy = tf.distribute.MirroredStrategy()
-
+#%%
 #with mirrored_strategy.scope():
-
+max_features = X_train.shape[0]
 model = Sequential()
-
+model.add(Embedding(max_features, 128, input_shape=(X_train.shape[1],)))
+model.add(IndRNN(128, recurrent_clip_min=-1, recurrent_clip_max=-1, dropout=0.0, recurrent_dropout=0.0,
+                 return_sequences=True))
 #model.add(LSTM(50, activation='relu', input_shape=(X_train.shape[1],1)))
-model.add(RNN(cells, input_shape=(X_train.shape[1],1)))
+#model.add(RNN(cells, input_shape=X_train.shape[1:]))
 
 model.add(Dense(n_labels*n_future))
 #print('Evaluate IRNN...')
 
    
-# model.summary()
+model.summary()
+#%%
 # compile the model
 model.compile(optimizer='adam', loss='mse', metrics=['mse'])
     
