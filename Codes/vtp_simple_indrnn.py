@@ -200,82 +200,97 @@ def create_model(LSTM_name,train):
     model.compile(optimizer='adam', loss='mse', metrics=['mse'])
     return model
 #%% LSTM traning - main program
-def lstm_training(cars=5,standard=False, model_name=LSTM_names[0]):
-    np.random.seed(23)
-    veh_list = np.random.choice(vehicle_ids,cars)
-    sub_df = df[df.Vehicle_ID.isin(veh_list)].copy()
+cars=5
+standard=False
+
+np.random.seed(23)
+veh_list = np.random.choice(vehicle_ids,cars)
+sub_df = df[df.Vehicle_ID.isin(veh_list)].copy()
+
+
+
+"""## Data preparation"""
+
+# turn the data set into sequences
+X, y = treatment_cars(sub_df, 
+                      n_in=n_steps, n_out=n_future,
+                      labels = target_names,
+                      series_features=series_feature_names, show_result=True)
+
+# Split the data set
+X_train, X_test, y_train, y_test = train_test_split(X,y, 
+                                                test_size=0.3, random_state=42)
+#print(X_train.shape,X_test.shape, y_train.shape, y_test.shape)
+#X_train.describe()
+
+### Standardize the data
+if standard:        
+    train_mean = X_train.mean()
+    train_std = X_train.std()
     
+    X_train = (X_train - train_mean) / train_std
+    X_test = (X_test - train_mean) / train_std
 
 
-    """## Data preparation"""
-    
-    # turn the data set into sequences
-    X, y = treatment_cars(sub_df, 
-                          n_in=n_steps, n_out=n_future,
-                          labels = target_names,
-                          series_features=series_feature_names, show_result=True)
+"""### Reshape data sets to match the selected model"""
 
-    # Split the data set
-    X_train, X_test, y_train, y_test = train_test_split(X,y, 
-                                                    test_size=0.3, random_state=42)
-    #print(X_train.shape,X_test.shape, y_train.shape, y_test.shape)
-    #X_train.describe()
-
-    ### Standardize the data
-    if standard:        
-        train_mean = X_train.mean()
-        train_std = X_train.std()
-        
-        X_train = (X_train - train_mean) / train_std
-        X_test = (X_test - train_mean) / train_std
+X_train = X_train.values
+X_test = X_test.values
+# reshape into [# samples, # timesteps,# features]
+X_train = np.float32(X_train.reshape((X_train.shape[0], X_train.shape[1],1)))
+X_test = np.float32(X_test.reshape((X_test.shape[0], X_test.shape[1],1)))
 
 
-    """### Reshape data sets to match the selected model"""
-
-    X_train = X_train.values
-    X_test = X_test.values
-    # reshape into [# samples, # timesteps,# features]
-    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1],1))
-    X_test = X_test.reshape((X_test.shape[0], X_test.shape[1],1))
-    
-    
-    """## Prediction model"""
+"""## Prediction model"""
   
-    tf.random.set_seed(24)
-    # create model
-    mirrored_strategy = tf.distribute.MirroredStrategy()
+tf.random.set_seed(24)
+# create model
+hidden_units = 128
+cells = [IndRNNCell(hidden_units),
+         IndRNNCell(hidden_units)]
 
-    with mirrored_strategy.scope():
-        model = create_model(LSTM_names[0],X_train)
-    # Interrupt training if `val_loss` stops improving for over 10 epochs
-    stop_learn= tf.keras.callbacks.EarlyStopping(patience=10, monitor='val_loss')
-    #print(model.summary())
-    
-    # fit model
-    start = time.time()
-    Monitor = model.fit(X_train,y_train, epochs=5, 
-                        callbacks=[stop_learn],
-                        validation_data=(X_test,y_test), verbose=1)
-    end = time.time()
-    
-    # Check the training process
-    # hist = pd.DataFrame(Monitor.history)
-    # hist['epoch'] = Monitor.epoch
-    # fig, axes = plt.subplots(nrows=1, ncols=2,figsize=(10,4),dpi=150)
-    # hist[['loss','val_loss']].plot(ax=axes[0])
-    # hist[['mse','val_mse']].plot(ax=axes[1])
-    # plt.show()
-    # hist.tail()
+#mirrored_strategy = tf.distribute.MirroredStrategy()
 
-    # Evaluation
+#with mirrored_strategy.scope():
 
-    yhat = model.predict(X_test, verbose=1)
-    rms = sqrt(mean_squared_error(y_test, yhat))
-    #print(yhat[:5])
+model = Sequential()
+
+#model.add(LSTM(50, activation='relu', input_shape=(X_train.shape[1],1)))
+model.add(RNN(cells, input_shape=(X_train.shape[1],1)))
+
+model.add(Dense(n_labels*n_future))
+#print('Evaluate IRNN...')
+
+   
+# model.summary()
+# compile the model
+model.compile(optimizer='adam', loss='mse', metrics=['mse'])
     
-    return [rms, end-start]
-result = lstm_training()
-print("The RMSE is {0:.3f} and the model was trained within {1:.3f} sec".format(result[0],result[1]))
+# Interrupt training if `val_loss` stops improving for over 10 epochs
+stop_learn= tf.keras.callbacks.EarlyStopping(patience=10, monitor='val_loss')
+#print(model.summary())
+
+# fit model
+start = time.time()
+Monitor = model.fit(X_train,y_train, epochs=5, 
+                    callbacks=[stop_learn],
+                    validation_data=(X_test,y_test), verbose=1)
+end = time.time()
+
+# Check the training process
+# hist = pd.DataFrame(Monitor.history)
+# hist['epoch'] = Monitor.epoch
+# fig, axes = plt.subplots(nrows=1, ncols=2,figsize=(10,4),dpi=150)
+# hist[['loss','val_loss']].plot(ax=axes[0])
+# hist[['mse','val_mse']].plot(ax=axes[1])
+# plt.show()
+# hist.tail()
+
+# Evaluation
+
+yhat = model.predict(X_test, verbose=1)
+rms = sqrt(mean_squared_error(y_test, yhat))
+print("The RMSE is {0:.3f} and the model was trained within {1:.3f} sec".format(rms,end-start))
 #%%
 """# Various models (3 → 7)"""
 
