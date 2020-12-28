@@ -1,1 +1,0 @@
-ssh -XY -l tduong21  sabine.rcdc.uh.edu
