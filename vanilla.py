@@ -25,13 +25,13 @@ from io import StringIO, BytesIO
 from zipfile import ZipFile
 import urllib.request
 plt.rcParams['figure.figsize'] = (8, 6)
-from math import sqrt
+
 import os
 # For data processing
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-
+from math import sqrt
 # For prediction model
 
 import tensorflow as tf
